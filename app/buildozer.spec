@@ -38,7 +38,7 @@ android.ndk = 25b
 
 # (str) Android SDK version to use
 android.sdk = 33
-
+android.build_tools_version = 33.0.2
 # (bool) Indicate whether the application should be fullscreen or not
 fullscreen = 0
 
