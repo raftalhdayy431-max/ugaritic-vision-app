@@ -21,18 +21,21 @@ jobs:
       run: |
         sudo dpkg --add-architecture i386
         sudo apt-get update
-        sudo apt-get install -y build-essential ccache git python3-dev zlib1g-dev unzip libncurses6:i386 libstdc++6:i386 zlib1g:i386
+        sudo apt-get install -y build-essential ccache git python3-dev zlib1g-dev unzip libncurses6:i386 libstdc++6:i386 zlib1g:i386 openjdk-17-jdk
+
     - name: Install Buildozer and Cython
       run: |
         pip install --upgrade cython buildozer
 
-    - name: Build APK with Buildozer
+    - name: Accept Android Licenses & Build APK
       run: |
-        yes | sdkmanager --licenses || true
-        cd app && buildozer -v android debug
+        mkdir -p ~/.android
+        touch ~/.android/repositories.cfg
+        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+        cd app && yes | buildozer -v android debug
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: ugaritic-apk
-        path: bin/*.apk
+        path: app/bin/*.apk
