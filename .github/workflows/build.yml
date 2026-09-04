@@ -28,8 +28,11 @@ jobs:
         pip install --upgrade pip
         pip install --upgrade cython==0.29.36 buildozer
 
-    - name: Pre-Download Android NDK r25b & Bypass Server Errors
+    - name: Purge Old Build Cache & Pre-Download Android NDK r25b
       run: |
+        # مسح تام لأي ملفات مؤقتة قديمة قد تتسبب بتعطيل البناء
+        rm -rf app/.buildozer ~/.buildozer /home/runner/.buildozer
+
         PLATFORM_DIR="/home/runner/.buildozer/android/platform"
         mkdir -p "$PLATFORM_DIR"
 
@@ -89,7 +92,7 @@ jobs:
           "platforms;android-33" \
           "build-tools;33.0.2" || true
 
-    - name: Build APK with Buildozer (Production Hardened Mode)
+    - name: Build APK with Clean Hardened Environment
       run: |
         export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
         export ANDROID_SDK_ROOT="$ANDROID_HOME"
