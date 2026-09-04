@@ -76,8 +76,8 @@ android.api = 33
 
 # Minimum Android API
 
-android.minapi = 21
-
+android.minapi = 24
+android.ndk_api = 24
 # Android SDK Platform
 
 android.sdk = 33
