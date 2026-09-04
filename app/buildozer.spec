@@ -19,8 +19,8 @@ source.include_exts = py,png,jpg,kv,ttf,tflite
 source.include_patterns = fonts/*.ttf,*.tflite
 
 # (list) Application requirements
-requirements = python3,kivy,kivymd,pillow,numpy,opencv-python,tensorflow-lite
-
+# استبدل السطر القديم بهذا السطر الصحيح هندسياً:
+requirements = python3,kivy,kivymd,pillow,numpy,opencv,tflite-runtime
 # (str) Supported orientations
 orientation = portrait
 
