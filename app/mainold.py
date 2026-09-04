@@ -3,11 +3,15 @@ import shutil
 import threading
 import time
 from pathlib import Path
-import tensorflow as tf
-import cv2
+try:
+    from tflite_runtime.interpreter import Interpreter
+except ImportError:
+    try:
+        import tensorflow as tf
+        Interpreter = tf.lite.Interpreter
+    except ImportError:
+        Interpreter = Noneimport cv2
 import numpy as np
-import torch
-
 from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
 
@@ -401,7 +405,7 @@ def load_inference_model(path):
         with open(path, "rb") as f:
             model_content = f.read()
 
-        interpreter = tf.lite.Interpreter(
+        interpreter = Interpreter(
             model_content=model_content,
             num_threads=2
         )
