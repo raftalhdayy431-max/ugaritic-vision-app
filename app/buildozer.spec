@@ -1,54 +1,141 @@
 [app]
 
 # (str) Title of your application
+
 title = Ugaritic Vision AI
+
+# (str) Application version
+
 version = 0.1
+
 # (str) Package name
+
 package.name = ugariticvision
 
-# (str) Package domain (needed for android packaging)
+# (str) Package domain
+
 package.domain = org.ugaritic
 
-# (str) Source files where the *.py files live
+# ============================================================
+
+# SOURCE
+
+# ============================================================
+
+# (str) Source files directory
+
 source.dir = .
 
-# (list) Source files to include
+# (list) Source extensions to include
+
 source.include_exts = py,png,jpg,kv,ttf,tflite
 
-# (list) List of inclusions
+# (list) Additional source patterns
+
 source.include_patterns = fonts/*.ttf,*.tflite
 
-# (list) Application requirements
-# استبدل السطر القديم بهذا السطر الصحيح هندسياً:
+# ============================================================
+
+# PYTHON REQUIREMENTS
+
+# ============================================================
+
 requirements = python3,kivy,kivymd,pillow,numpy,opencv,tflite-runtime
-# (str) Supported orientations
+
+# ============================================================
+
+# DISPLAY
+
+# ============================================================
+
+# (str) Supported orientation
+
 orientation = portrait
 
-# (list) Permissions
-android.permissions = CAMERA,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
+# (bool) Fullscreen mode
 
-# (int) Target Android API (تم رفعه إلى 34 ليتوافق مع أحدث متطلبات متجر جوجل بلاي والإصدارات الحديثة)
-android.api = 33
-
-# (int) Minimum API your APK will support (تم ضبطه على 21 ليدعم الهواتف القديمة بدءاً من Android 5.0 فصاعداً)
-android.minapi = 21
-
-# (int) Android NDK version to use (الإصدار الأقر والأكثر استقراراً مع بايثون وتنسرفلو)
-android.ndk = 25b
-
-# (str) Android SDK version to use
-android.sdk = 33
-android.build_tools_version = 33.0.2
-# (bool) Indicate whether the application should be fullscreen or not
 fullscreen = 0
 
-# (str) Supported architectures (دعم المعمارية القديمة والحديثة 32-bit و 64-bit ليعمل التطبيق على كافة الأجهزة بلا استثناء)
+# ============================================================
+
+# ANDROID PERMISSIONS
+
+# ============================================================
+
+android.permissions = CAMERA,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
+
+# ============================================================
+
+# ANDROID SDK CONFIGURATION
+
+# ============================================================
+
+# Target Android API
+
+android.api = 33
+
+# Minimum Android API
+
+android.minapi = 21
+
+# Android SDK Platform
+
+android.sdk = 33
+
+# Force specific Build Tools version
+
+android.build_tools_version = 33.0.2
+
+# ============================================================
+
+# ANDROID NDK
+
+# ============================================================
+
+# Stable NDK version
+
+android.ndk = 25b
+
+# ============================================================
+
+# ANDROID ARCHITECTURES
+
+# ============================================================
+
+# ARM 64-bit and ARM 32-bit support
+
 android.archs = arm64-v8a, armeabi-v7a
+
+# ============================================================
+
+# GITHUB ACTIONS SDK OVERRIDES
+
+# ============================================================
+
+# Force Buildozer to use the pre-installed SDK
+
+android.sdk_path = /home/runner/.buildozer/android/platform/android-sdk
+
+# Prevent Buildozer from automatically updating SDK components
+
+android.skip_update = True
+
+# SDK licenses are accepted automatically in CI
+
+android.accept_sdk_license = True
+
+# ============================================================
+
+# BUILDOZER
+
+# ============================================================
 
 [buildozer]
 
-# (int) Log level (0 = error, 1 = info, 2 = debug)
+# Log level
+
 log_level = 2
 
-# (int) Display warning if buildozer is run as root
+# Display warning if buildozer is run as root
+
 warn_root = 1
