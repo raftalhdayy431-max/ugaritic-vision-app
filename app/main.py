@@ -3,15 +3,9 @@ import shutil
 import threading
 import time
 from pathlib import Path
-try:
-    from tflite_runtime.interpreter import Interpreter
-except ImportError:
-    try:
-        import tensorflow as tf
-        Interpreter = tf.lite.Interpreter
-    except ImportError:
-        Interpreter = Noneimport cv2
+import cv2
 import numpy as np
+
 from PIL import Image as PILImage
 from PIL import ImageDraw, ImageFont
 
@@ -36,7 +30,11 @@ from kivymd.uix.dialog import MDDialog
 from kivymd.uix.scrollview import MDScrollView
 from kivymd.uix.card import MDCard
 
-
+try:
+    from tflite_runtime.interpreter import Interpreter
+except ImportError:
+    import tensorflow as tf
+    Interpreter = tf.lite.Interpreter
 # ====================================================================
 # OPTIONAL FILE CHOOSER
 # ====================================================================
@@ -54,7 +52,7 @@ except Exception:
 # ====================================================================
 
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_PATH = BASE_DIR / "best.tflite"
+MODEL_PATH = BASE_DIR / "bestfinetuneing.tflite"
 CUSTOM_FONT_PATH = BASE_DIR / "fonts" / "NotoSansUgaritic-Regular.ttf"
 
 _FONT_CACHE = {}
@@ -326,10 +324,10 @@ def post_process_yolo(outputs, frame, conf_threshold, iou_threshold, imgsz=256, 
     if outputs is None:
         return empty_res
 
-    if torch.is_tensor(outputs):
-        outputs = outputs.detach().float().cpu().numpy()
-    elif isinstance(outputs, (list, tuple)):
-        outputs = outputs[0].detach().float().cpu().numpy() if torch.is_tensor(outputs[0]) else np.asarray(outputs[0], dtype=np.float32)
+    if isinstance(outputs, (list, tuple)):
+        outputs = np.asarray(outputs[0], dtype=np.float32)
+    else:
+        outputs = np.asarray(outputs, dtype=np.float32)
 
     outputs = np.asarray(outputs, dtype=np.float32)
     if outputs.ndim == 3 and outputs.shape[0] == 1:
@@ -405,7 +403,7 @@ def load_inference_model(path):
         with open(path, "rb") as f:
             model_content = f.read()
 
-        interpreter = Interpreter(
+        interpreter = tf.lite.Interpreter(
             model_content=model_content,
             num_threads=2
         )
