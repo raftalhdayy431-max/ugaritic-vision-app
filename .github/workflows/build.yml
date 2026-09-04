@@ -29,14 +29,16 @@ jobs:
 
     - name: Reverse-Engineer & Force Pre-Install SDK Tools & Licenses
       run: |
-        # 1. Create buildozer's internal Android SDK directory tree
         SDK_DIR="/home/runner/.buildozer/android/platform/android-sdk"
+        
+        # 1. إنشاء الهيكل التنظيمي الكامل لمسارات أندرويد وبيلدوزر القديمة والحديثة
         mkdir -p "$SDK_DIR/licenses"
-        mkdir -p "$SDK_DIR/build-tools"
-        mkdir -p "$SDK_DIR/platforms"
+        mkdir -p "$SDK_DIR/build-tools/33.0.2"
+        mkdir -p "$SDK_DIR/platforms/android-33"
         mkdir -p "$SDK_DIR/platform-tools"
+        mkdir -p "$SDK_DIR/tools/bin"
 
-        # 2. Inject comprehensive cryptographic license hashes to bypass all prompts permanently
+        # 2. زرع بصمات التراخيص الرسمية لمنع توقف البناء نهائياً
         cat << 'EOF' > "$SDK_DIR/licenses/android-sdk-license"
         8933bac1632f4fe7906bf174efb15daae6137ea2
         d56f518747f451e06a5bddb4d7afab13355d40f4
@@ -45,43 +47,35 @@ jobs:
         504667f4c00dcd19eeb1cddf131da0e6cc139652
         EOF
 
-        # Create additional license file for newer extensions if required by sdkmanager
         cat << 'EOF' > "$SDK_DIR/licenses/android-sdk-preview-license"
         84831b9409646a918e30573bab4c9c91346d8abd
         EOF
 
-        # 3. Hijack environment variables to point straight to the forced structure
+        # 3. نسخ أدوات سطر الأوامر لمسار tools التقليدي ليتوافق مع فحص بيلدوزر الصارم
+        if [ -d "/usr/local/lib/android/sdk/cmdline-tools/latest" ]; then
+          cp -r /usr/local/lib/android/sdk/cmdline-tools/latest/* "$SDK_DIR/tools/"
+        fi
+
+        # 4. ضبط المتغيرات البيئية وتوجيه النظام بالكامل للمسار المحلي المزيف/المحكوم
         export ANDROID_HOME="$SDK_DIR"
         export ANDROID_SDK_ROOT="$SDK_DIR"
         export PATH="$SDK_DIR/platform-tools:$SDK_DIR/tools/bin:$PATH"
 
-        # 4. Locate GitHub Actions runner's pre-installed SDK or download command-line tools if missing
-        CMDLINE_TOOLS="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+        # 5. التثبيت المسبق للإصدارات المطابقة لملف buildozer.spec (API 33 و Build-Tools 33.0.2)
+        CMDLINE_TOOLS="$SDK_DIR/tools/bin/sdkmanager"
         if [ ! -f "$CMDLINE_TOOLS" ]; then
-          # Fallback to runner's default Android SDK command-line tools if available
-          DEFAULT_SDKMANAGER="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
-          if [ -f "$DEFAULT_SDKMANAGER" ]; then
-            CMDLINE_TOOLS="$DEFAULT_SDKMANAGER"
-          fi
+          CMDLINE_TOOLS="/usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager"
         fi
 
-        # 5. Force installation of required packages directly via sdkmanager with automated license piping
         yes | "$CMDLINE_TOOLS" --sdk_root="$ANDROID_HOME" \
           "platform-tools" \
           "platforms;android-33" \
-          "build-tools;33.0.2" \
-          "build-tools;37.0.0" || true
+          "build-tools;33.0.2" || true
 
-        # 6. Ensure build-tools directories are correctly exposed where buildozer expects them
-        if [ -d "/usr/local/lib/android/sdk/build-tools/37.0.0" ] && [ ! -d "$SDK_DIR/build-tools/37.0.0" ]; then
-          ln -s /usr/local/lib/android/sdk/build-tools/37.0.0 "$SDK_DIR/build-tools/37.0.0"
+        # 6. ربط الأدوات الجاهزة من بيئة الوثيقة الأساسية للرันر إن وجدت ضماناً للسرعة وعدم الفشل
+        if [ -d "/usr/local/lib/android/sdk/build-tools/33.0.2" ] && [ ! "$(ls -A $SDK_DIR/build-tools/33.0.2)" ]; then
+          cp -r /usr/local/lib/android/sdk/build-tools/33.0.2/* "$SDK_DIR/build-tools/33.0.2/"
         fi
-        if [ -d "/usr/local/lib/android/sdk/build-tools/33.0.2" ] && [ ! -d "$SDK_DIR/build-tools/33.0.2" ]; then
-          ln -s /usr/local/lib/android/sdk/build-tools/33.0.2 "$SDK_DIR/build-tools/33.0.2"
-        fi
-
-        # Verify build-tools presence
-        ls -la "$SDK_DIR/build-tools"
 
     - name: Build APK with Buildozer
       run: |
