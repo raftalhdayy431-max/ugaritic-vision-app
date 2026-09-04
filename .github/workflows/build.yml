@@ -23,12 +23,12 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential ccache git python3-dev zlib1g-dev unzip libncurses6:i386 libstdc++6:i386 zlib1g:i386 openjdk-17-jdk wget curl libltdl-dev
 
-    - name: Install Buildozer, Cython and Build Tools
+    - name: Install Buildozer and Compatible Cython
       run: |
         pip install --upgrade pip
         pip install --upgrade cython==0.29.36 buildozer
 
-    - name: Pre-Download Android NDK r25b & Bypass Server 502 Errors
+    - name: Pre-Download Android NDK r25b & Bypass Server Errors
       run: |
         PLATFORM_DIR="/home/runner/.buildozer/android/platform"
         mkdir -p "$PLATFORM_DIR"
@@ -45,8 +45,6 @@ jobs:
         
         if [ -d "$PLATFORM_DIR/android-ndk-r25b-linux" ]; then
           mv "$PLATFORM_DIR/android-ndk-r25b-linux" "$PLATFORM_DIR/android-ndk-r25b"
-        elif [ -d "$PLATFORM_DIR/android-ndk-r25b" ]; then
-          echo "NDK extracted successfully."
         fi
         
         rm -f "$NDK_ZIP"
@@ -91,10 +89,15 @@ jobs:
           "platforms;android-33" \
           "build-tools;33.0.2" || true
 
-    - name: Build APK with Buildozer (Debug Mode)
+    - name: Build APK with Buildozer (Production Hardened Mode)
       run: |
         export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
         export ANDROID_SDK_ROOT="$ANDROID_HOME"
+        export ANDROID_NDK_HOME="/home/runner/.buildozer/android/platform/android-ndk-r25b"
+        export ANDROID_NDK="/home/runner/.buildozer/android/platform/android-ndk-r25b"
+        export ANDROID_NDK_ROOT="/home/runner/.buildozer/android/platform/android-ndk-r25b"
+        export ANDROIDNDK="/home/runner/.buildozer/android/platform/android-ndk-r25b"
+
         cd app && buildozer -v --debug android debug
 
     - name: Upload APK Artifact
