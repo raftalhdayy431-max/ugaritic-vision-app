@@ -1,3 +1,4 @@
+```yaml
 name: Build Android APK
 
 on:
@@ -34,7 +35,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-          cache: "pip"
 
 
       # ============================================================
@@ -48,7 +48,7 @@ jobs:
 
 
       # ============================================================
-      # 4. Linux dependencies
+      # 4. Install Linux dependencies
       # ============================================================
       - name: Install system dependencies
         run: |
@@ -83,126 +83,179 @@ jobs:
 
 
       # ============================================================
-      # 5. Show Android SDK / NDK
+      # 5. Check environment
       # ============================================================
-      - name: Check Android environment
+      - name: Check build environment
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          echo "JAVA_HOME=$JAVA_HOME"
+          echo "=============================================="
+          echo "PYTHON"
+          echo "=============================================="
+          python --version
+          pip --version
 
+          echo ""
+          echo "=============================================="
+          echo "JAVA"
+          echo "=============================================="
           java -version
 
           echo ""
-          echo "Installed Android SDK:"
+          echo "=============================================="
+          echo "ANDROID SDK"
+          echo "=============================================="
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+
           ls -la "$ANDROID_HOME" || true
 
           echo ""
-          echo "Installed platforms:"
+          echo "=============================================="
+          echo "ANDROID PLATFORMS"
+          echo "=============================================="
+
           ls -la "$ANDROID_HOME/platforms" || true
 
           echo ""
-          echo "Installed build tools:"
+          echo "=============================================="
+          echo "ANDROID BUILD TOOLS"
+          echo "=============================================="
+
           ls -la "$ANDROID_HOME/build-tools" || true
 
           echo ""
-          echo "Installed NDK:"
+          echo "=============================================="
+          echo "ANDROID NDK"
+          echo "=============================================="
+
           ls -la "$ANDROID_HOME/ndk" || true
 
 
       # ============================================================
-      # 6. Install exact SDK 33 + Build Tools 33.0.2
+      # 6. Locate sdkmanager
       # ============================================================
-      - name: Install Android SDK 33
+      - name: Locate Android SDK tools
         shell: bash
         run: |
           set -e
 
           SDK="$ANDROID_HOME"
 
-          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          echo "Searching for sdkmanager..."
 
-          if [ ! -f "$SDKMANAGER" ]; then
-            echo "sdkmanager not found at:"
-            echo "$SDKMANAGER"
-            exit 1
+          find "$SDK/cmdline-tools" -name sdkmanager -type f 2>/dev/null || true
+
+          if [ -f "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "SDKMANAGER=$SDK/cmdline-tools/latest/bin/sdkmanager" >> "$GITHUB_ENV"
+          else
+            SDKMANAGER=$(find "$SDK/cmdline-tools" -name sdkmanager -type f | head -n 1)
+
+            if [ -z "$SDKMANAGER" ]; then
+              echo "ERROR: sdkmanager was not found."
+              exit 1
+            fi
+
+            echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
           fi
 
-          yes | "$SDKMANAGER" --sdk_root="$SDK" --licenses || true
+          echo "Using sdkmanager:"
+          cat "$GITHUB_ENV" | grep SDKMANAGER
 
-          "$SDKMANAGER" --sdk_root="$SDK" \
+
+      # ============================================================
+      # 7. Install SDK 33 + Build Tools 33.0.2
+      # ============================================================
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          set -e
+
+          echo "Accepting Android SDK licenses..."
+
+          yes | "$SDKMANAGER" \
+            --sdk_root="$ANDROID_HOME" \
+            --licenses || true
+
+          echo ""
+          echo "Installing required Android SDK components..."
+
+          "$SDKMANAGER" \
+            --sdk_root="$ANDROID_HOME" \
             "platform-tools" \
             "platforms;android-33" \
             "build-tools;33.0.2"
 
           echo ""
-          echo "SDK installation completed."
+          echo "SDK components installed."
 
 
       # ============================================================
-      # 7. Install NDK 25b
+      # 8. Install NDK 25b
       # ============================================================
       - name: Install Android NDK 25b
         shell: bash
         run: |
           set -e
 
-          SDK="$ANDROID_HOME"
-          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          NDK_VERSION="25.2.9519653"
 
-          if [ ! -d "$SDK/ndk/25.2.9519653" ]; then
-            echo "Installing NDK 25.2.9519653..."
-
-            "$SDKMANAGER" --sdk_root="$SDK" \
-              "ndk;25.2.9519653"
+          if [ -d "$ANDROID_HOME/ndk/$NDK_VERSION" ]; then
+            echo "NDK $NDK_VERSION already installed."
           else
-            echo "NDK 25.2.9519653 already exists."
+            echo "Installing NDK $NDK_VERSION..."
+
+            "$SDKMANAGER" \
+              --sdk_root="$ANDROID_HOME" \
+              "ndk;$NDK_VERSION"
           fi
 
           echo ""
           echo "Available NDK versions:"
-          ls -la "$SDK/ndk" || true
+          ls -la "$ANDROID_HOME/ndk"
 
 
       # ============================================================
-      # 8. Configure NDK variables
+      # 9. Configure NDK
       # ============================================================
-      - name: Configure Android NDK
+      - name: Configure NDK environment
         shell: bash
         run: |
           NDK="$ANDROID_HOME/ndk/25.2.9519653"
 
+          if [ ! -d "$NDK" ]; then
+            echo "ERROR: NDK not found:"
+            echo "$NDK"
+            exit 1
+          fi
+
           echo "ANDROID_NDK_HOME=$NDK" >> "$GITHUB_ENV"
           echo "ANDROID_NDK_ROOT=$NDK" >> "$GITHUB_ENV"
 
-          echo "NDK configured:"
-          echo "$NDK"
-
-          "$NDK/ndk-build" --version || true
+          echo ""
+          echo "ANDROID_NDK_HOME=$NDK"
 
 
       # ============================================================
-      # 9. Install Python build tools
+      # 10. Install Buildozer
       # ============================================================
-      - name: Install Buildozer and Python-for-Android tools
+      - name: Install Buildozer
+        shell: bash
         run: |
-          python --version
-          pip --version
-
-          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools wheel
 
           python -m pip install \
             "cython<3.1" \
             "buildozer==1.5.0"
 
           echo ""
-          echo "Installed packages:"
-          pip show buildozer
-          pip show cython
+          echo "Installed versions:"
+          python --version
+          pip --version
+          buildozer --version
 
 
       # ============================================================
-      # 10. Buildozer cache
+      # 11. Restore Buildozer cache
       # ============================================================
       - name: Restore Buildozer cache
         uses: actions/cache@v4
@@ -210,56 +263,91 @@ jobs:
           path: |
             /home/runner/.buildozer/android/packages
             /home/runner/.buildozer/android/platform
-          key: buildozer-android33-${{ runner.os }}-${{ hashFiles('app/buildozer.spec') }}
+          key: buildozer-${{ runner.os }}-${{ hashFiles('app/buildozer.spec') }}
           restore-keys: |
-            buildozer-android33-${{ runner.os }}-
-            buildozer-android33-
+            buildozer-${{ runner.os }}-
 
 
       # ============================================================
-      # 11. Prepare Buildozer directories
+      # 12. Prepare Buildozer directories
       # ============================================================
-      - name: Prepare Buildozer
+      - name: Prepare Buildozer directories
         shell: bash
         run: |
           mkdir -p /home/runner/.buildozer/android/packages
           mkdir -p /home/runner/.buildozer/android/platform
 
-          echo "Buildozer cache:"
-          du -sh /home/runner/.buildozer/android/packages 2>/dev/null || true
+          echo "Buildozer directory:"
+          ls -la /home/runner/.buildozer/android || true
 
 
       # ============================================================
-      # 12. Check buildozer.spec
+      # 13. Verify project
       # ============================================================
-      - name: Verify buildozer.spec
+      - name: Verify Android project
+        shell: bash
         run: |
-          cd app
+          if [ ! -d "app" ]; then
+            echo "ERROR: app directory not found."
+            echo ""
+            echo "Repository contents:"
+            ls -la
+            exit 1
+          fi
 
+          if [ ! -f "app/buildozer.spec" ]; then
+            echo "ERROR: app/buildozer.spec not found."
+            exit 1
+          fi
+
+          echo "Project found:"
+          ls -la app
+
+          echo ""
           echo "================ buildozer.spec ================"
-          cat buildozer.spec
+          cat app/buildozer.spec
           echo "================================================="
 
 
       # ============================================================
-      # 13. Clean only old build state
+      # 14. Verify Android configuration
       # ============================================================
-      - name: Prepare application build directory
+      - name: Verify Android configuration
+        shell: bash
+        working-directory: app
+        run: |
+          echo "Checking Android configuration..."
+
+          grep -E \
+            "android.api|android.minapi|android.ndk|android.sdk|android.build_tools_version|android.archs" \
+            buildozer.spec || true
+
+          echo ""
+          echo "Expected:"
+          echo "android.api = 33"
+          echo "android.minapi = 24"
+          echo "android.ndk = 25b"
+          echo "android.sdk = 33"
+          echo "android.build_tools_version = 33.0.2"
+
+
+      # ============================================================
+      # 15. Clean APK output only
+      # ============================================================
+      - name: Prepare APK output
         shell: bash
         run: |
-          cd app
+          mkdir -p app/bin
 
-          mkdir -p bin
+          rm -f app/bin/*.apk
+          rm -f app/bin/*.aab
 
-          # لا نحذف ~/.buildozer لأننا نريد الاستفادة من الـ cache
-          rm -rf bin/*
-
-          echo "Application directory:"
-          ls -la
+          echo "APK output directory:"
+          ls -la app/bin
 
 
       # ============================================================
-      # 14. Build APK
+      # 16. Build APK
       # ============================================================
       - name: Build APK
         shell: bash
@@ -268,9 +356,10 @@ jobs:
           set -o pipefail
 
           echo "=============================================="
-          echo "Starting Buildozer Android build"
+          echo "BUILDING UGARITIC VISION AI"
           echo "=============================================="
 
+          echo ""
           echo "Python:"
           python --version
 
@@ -279,76 +368,74 @@ jobs:
           buildozer --version
 
           echo ""
-          echo "Android SDK:"
+          echo "SDK:"
           echo "$ANDROID_HOME"
 
           echo ""
-          echo "Android NDK:"
+          echo "NDK:"
           echo "$ANDROID_NDK_HOME"
 
           echo ""
-          echo "=============================================="
-          echo "BUILD"
-          echo "=============================================="
+          echo "Starting Buildozer..."
 
           buildozer -v android debug 2>&1 | tee build.log
 
 
       # ============================================================
-      # 15. Retry build if network dependency fails
+      # 17. Retry build
       # ============================================================
-      - name: Retry APK build
+      - name: Retry Buildozer
         if: failure()
         shell: bash
         working-directory: app
         run: |
           echo ""
           echo "=============================================="
-          echo "First build failed."
-          echo "Retrying because dependency download may have"
-          echo "returned HTTP 502/temporary network error."
+          echo "BUILD FAILED"
+          echo "Retrying build..."
           echo "=============================================="
 
-          sleep 15
+          sleep 20
 
           buildozer -v android debug
 
 
       # ============================================================
-      # 16. Show generated files
+      # 18. Find APK
       # ============================================================
-      - name: List APK files
+      - name: Find APK
         if: always()
         shell: bash
         run: |
           echo "=============================================="
-          echo "APK FILES"
+          echo "GENERATED FILES"
           echo "=============================================="
 
-          find app/bin -maxdepth 1 -type f \
+          find app/bin \
+            -maxdepth 1 \
+            -type f \
             \( -name "*.apk" -o -name "*.aab" \) \
             -print 2>/dev/null || true
 
           echo ""
-          echo "BIN DIRECTORY:"
+          echo "BIN:"
           ls -lah app/bin 2>/dev/null || true
 
 
       # ============================================================
-      # 17. Upload APK
+      # 19. Upload APK
       # ============================================================
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ugaritic-vision-ai-apk
-          path: |
-            app/bin/*.apk
+          path: app/bin/*.apk
           if-no-files-found: error
 
 
       # ============================================================
-      # 18. Upload build log if failure
+      # 20. Upload logs if build fails
       # ============================================================
       - name: Upload build logs
         if: failure()
@@ -358,4 +445,6 @@ jobs:
           path: |
             app/build.log
             app/.buildozer/android/platform/python-for-android/build.log
+            app/.buildozer/android/platform/build-*/build.log
           if-no-files-found: ignore
+```
