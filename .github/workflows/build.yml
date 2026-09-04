@@ -28,6 +28,7 @@ jobs:
 
     - name: Build APK with Buildozer
       run: |
+        yes | sdkmanager --licenses || true
         cd app && buildozer -v android debug
 
     - name: Upload APK Artifact
