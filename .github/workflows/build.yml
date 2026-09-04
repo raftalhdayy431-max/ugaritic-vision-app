@@ -50,12 +50,10 @@ jobs:
 
       # ============================================================
       # 4. SYSTEM DEPENDENCIES
-      # بدون i386 لتسريع البناء
       # ============================================================
       - name: Install system dependencies
         run: |
           sudo apt-get update -qq
-
           sudo apt-get install -y -qq \
             build-essential \
             ccache \
@@ -74,18 +72,14 @@ jobs:
       - name: Install Buildozer and Python dependencies
         run: |
           python -m pip install --upgrade pip setuptools wheel
-
-          python -m pip install \
-            "Cython<3.1" \
-            buildozer
-
+          python -m pip install "Cython<3.1" buildozer
           buildozer --version
 
 
       # ============================================================
       # 6. CREATE BUILDOZER SDK DIRECTORY
       # ============================================================
-      - name: Create forced Buildozer SDK directory
+      - name: Create Android SDK directory
         run: |
           set -eux
 
@@ -127,41 +121,14 @@ jobs:
             "$SOURCE_SDK/cmdline-tools/latest" \
             "$SDK/cmdline-tools/latest"
 
-
-      # ============================================================
-      # 8. CREATE LEGACY SDK COMPATIBILITY
-      #
-      # مهم:
-      # نربط latest كاملاً وليس bin فقط
-      # لأن sdkmanager يحتاج bin + lib
-      # ============================================================
-      - name: Create legacy SDK compatibility
-        run: |
-          set -eux
-
-          SDK="$HOME/.buildozer/android/platform/android-sdk"
-
-          # حذف أي tools قديم أو symlink مكسور
-          rm -rf "$SDK/tools"
-
-          # ربط cmdline-tools/latest بالكامل
-          ln -s \
-            "$SDK/cmdline-tools/latest" \
-            "$SDK/tools"
-
-          echo "Testing modern sdkmanager..."
+          echo "Testing sdkmanager..."
           "$SDK/cmdline-tools/latest/bin/sdkmanager" \
             --sdk_root="$SDK" \
             --version
 
-          echo "Testing legacy-compatible sdkmanager..."
-          "$SDK/tools/bin/sdkmanager" \
-            --sdk_root="$SDK" \
-            --version
-
 
       # ============================================================
-      # 9. PRE-INJECT ANDROID LICENSE HASHES
+      # 8. PRE-INJECT LICENSE HASHES
       # ============================================================
       - name: Pre-inject Android SDK licenses
         run: |
@@ -179,21 +146,17 @@ jobs:
 
           chmod 644 "$SDK/licenses/android-sdk-license"
 
-          echo "Installed license hashes:"
-          cat "$SDK/licenses/android-sdk-license"
+          echo "License hashes installed."
 
 
       # ============================================================
-      # 10. ACCEPT ALL LICENSES
+      # 9. ACCEPT ANDROID SDK LICENSES
       # ============================================================
-      - name: Force accept Android SDK licenses
+      - name: Accept Android SDK licenses
         run: |
           set -eux
 
           SDK="$HOME/.buildozer/android/platform/android-sdk"
-
-          export ANDROID_HOME="$SDK"
-          export ANDROID_SDK_ROOT="$SDK"
 
           yes | \
             "$SDK/cmdline-tools/latest/bin/sdkmanager" \
@@ -202,9 +165,9 @@ jobs:
 
 
       # ============================================================
-      # 11. PRE-INSTALL ANDROID SDK PACKAGES
+      # 10. INSTALL REQUIRED SDK COMPONENTS
       # ============================================================
-      - name: Force pre-install Android SDK packages
+      - name: Install Android SDK packages
         run: |
           set -eux
 
@@ -215,18 +178,16 @@ jobs:
 
           SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
 
-          yes | "$SDKMANAGER" \
+          "$SDKMANAGER" \
             --sdk_root="$SDK" \
             --install \
             "platform-tools" \
             "platforms;android-33" \
-            "platforms;android-37" \
-            "build-tools;33.0.2" \
-            "build-tools;37.0.0"
+            "build-tools;33.0.2"
 
 
       # ============================================================
-      # 12. ACCEPT LICENSES AGAIN
+      # 11. ACCEPT LICENSES AGAIN
       # ============================================================
       - name: Re-accept Android SDK licenses
         run: |
@@ -241,7 +202,7 @@ jobs:
 
 
       # ============================================================
-      # 13. VERIFY SDK INSTALLATION
+      # 12. VERIFY SDK
       # ============================================================
       - name: Verify Android SDK installation
         run: |
@@ -250,49 +211,35 @@ jobs:
           SDK="$HOME/.buildozer/android/platform/android-sdk"
 
           echo "=========================================="
-          echo "ANDROID SDK BUILD TOOLS"
+          echo "ANDROID SDK STRUCTURE"
           echo "=========================================="
 
+          echo "Build Tools:"
           ls -la "$SDK/build-tools"
 
-          echo "=========================================="
-          echo "VERIFY BUILD TOOLS 33.0.2"
-          echo "=========================================="
+          echo "Platforms:"
+          ls -la "$SDK/platforms"
 
+          echo "Verifying Build Tools 33.0.2..."
           test -d "$SDK/build-tools/33.0.2"
           test -f "$SDK/build-tools/33.0.2/aidl"
           test -x "$SDK/build-tools/33.0.2/aidl"
 
-          echo "33.0.2 OK"
+          echo "Verifying Platform Android 33..."
+          test -d "$SDK/platforms/android-33"
 
-          echo "=========================================="
-          echo "VERIFY BUILD TOOLS 37.0.0"
-          echo "=========================================="
-
-          test -d "$SDK/build-tools/37.0.0"
-          test -f "$SDK/build-tools/37.0.0/aidl"
-          test -x "$SDK/build-tools/37.0.0/aidl"
-
-          echo "37.0.0 OK"
-
-          echo "=========================================="
-          echo "SDK VERIFIED SUCCESSFULLY"
-          echo "=========================================="
+          echo "Android SDK verified successfully."
 
 
       # ============================================================
-      # 14. FORCE PATCH BUILDOZER CONFIGURATION
+      # 13. PATCH BUILDOZER CONFIGURATION
       # ============================================================
-      - name: Force patch Buildozer SDK configuration
+      - name: Patch Buildozer configuration
         working-directory: app
         run: |
           set -eux
 
           SDK="$HOME/.buildozer/android/platform/android-sdk"
-
-          echo "=========================================="
-          echo "PATCHING buildozer.spec"
-          echo "=========================================="
 
           if grep -q "^android.sdk_path" buildozer.spec; then
             sed -i \
@@ -300,7 +247,7 @@ jobs:
               buildozer.spec
           else
             echo "" >> buildozer.spec
-            echo "# GitHub Actions forced SDK" >> buildozer.spec
+            echo "# Forced SDK for GitHub Actions" >> buildozer.spec
             echo "android.sdk_path = $SDK" >> buildozer.spec
           fi
 
@@ -320,32 +267,38 @@ jobs:
             echo "android.accept_sdk_license = True" >> buildozer.spec
           fi
 
-          echo ""
           echo "=========================================="
-          echo "FINAL ANDROID CONFIG"
+          echo "FINAL BUILDOZER CONFIG"
           echo "=========================================="
 
           grep -E \
-            "android.sdk_path|android.skip_update|android.accept_sdk_license|android.api|android.minapi|android.ndk|android.sdk|android.build_tools_version" \
+            "android.sdk_path|android.skip_update|android.accept_sdk_license|android.api|android.sdk|android.build_tools_version|android.ndk" \
             buildozer.spec || true
 
 
       # ============================================================
-      # 15. ADD ANDROID TOOLS TO PATH
+      # 14. ADD SDK TO PATH
       # ============================================================
-      - name: Inject Android tools into PATH
+      - name: Add Android SDK tools to PATH
         run: |
           SDK="$HOME/.buildozer/android/platform/android-sdk"
 
           echo "$SDK/platform-tools" >> "$GITHUB_PATH"
           echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          echo "$SDK/tools/bin" >> "$GITHUB_PATH"
-          echo "$SDK/build-tools/37.0.0" >> "$GITHUB_PATH"
           echo "$SDK/build-tools/33.0.2" >> "$GITHUB_PATH"
 
 
       # ============================================================
-      # 16. FINAL ENVIRONMENT DIAGNOSTICS
+      # 15. CLEAN PROJECT CACHE
+      # ============================================================
+      - name: Clean old Buildozer cache
+        working-directory: app
+        run: |
+          rm -rf .buildozer
+
+
+      # ============================================================
+      # 16. FINAL ENVIRONMENT CHECK
       # ============================================================
       - name: Final Android environment diagnostics
         run: |
@@ -357,31 +310,18 @@ jobs:
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
           echo ""
-          echo "SDK:"
-          ls -la "$SDK"
+          echo "SDK Manager:"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+            --sdk_root="$SDK" \
+            --version
 
           echo ""
           echo "Build Tools:"
           ls -la "$SDK/build-tools"
 
-          echo ""
-          echo "sdkmanager:"
-          "$SDK/cmdline-tools/latest/bin/sdkmanager" \
-            --sdk_root="$SDK" \
-            --version
-
 
       # ============================================================
-      # 17. CLEAN OLD PROJECT BUILD CACHE
-      # ============================================================
-      - name: Clean stale project build cache
-        working-directory: app
-        run: |
-          rm -rf .buildozer
-
-
-      # ============================================================
-      # 18. BUILD APK
+      # 17. BUILD APK
       # ============================================================
       - name: Build Android APK
         working-directory: app
@@ -393,33 +333,23 @@ jobs:
           set -eux
 
           echo "=========================================="
-          echo "BUILD ENVIRONMENT"
+          echo "STARTING BUILDOZER"
           echo "=========================================="
 
           echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-          echo ""
-          echo "Available Build Tools:"
           ls -la "$ANDROID_HOME/build-tools"
-
-          echo ""
-          echo "Starting Buildozer..."
 
           buildozer -v android debug
 
 
       # ============================================================
-      # 19. VERIFY APK
+      # 18. VERIFY APK
       # ============================================================
       - name: Verify generated APK
         working-directory: app
         run: |
           set -eux
-
-          echo "=========================================="
-          echo "GENERATED FILES"
-          echo "=========================================="
 
           find bin -type f -print
 
@@ -430,15 +360,12 @@ jobs:
             exit 1
           fi
 
-          echo ""
           echo "APK generated successfully:"
-          echo "$APK"
-
           ls -lh "$APK"
 
 
       # ============================================================
-      # 20. UPLOAD APK
+      # 19. UPLOAD APK
       # ============================================================
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
