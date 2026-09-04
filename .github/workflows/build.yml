@@ -77,7 +77,7 @@ jobs:
 
 
       # ============================================================
-      # 6. CREATE BUILDOZER SDK DIRECTORY
+      # 6. CREATE SDK DIRECTORY
       # ============================================================
       - name: Create Android SDK directory
         run: |
@@ -121,14 +121,46 @@ jobs:
             "$SOURCE_SDK/cmdline-tools/latest" \
             "$SDK/cmdline-tools/latest"
 
-          echo "Testing sdkmanager..."
+          echo "Testing modern sdkmanager..."
+
           "$SDK/cmdline-tools/latest/bin/sdkmanager" \
             --sdk_root="$SDK" \
             --version
 
 
       # ============================================================
-      # 8. PRE-INJECT LICENSE HASHES
+      # 8. CREATE LEGACY BUILDOZER SDKMANAGER WRAPPER
+      #
+      # Buildozer expects:
+      # tools/bin/sdkmanager
+      #
+      # Modern Android SDK uses:
+      # cmdline-tools/latest/bin/sdkmanager
+      # ============================================================
+      - name: Create Buildozer sdkmanager compatibility wrapper
+        run: |
+          set -eux
+
+          SDK="$HOME/.buildozer/android/platform/android-sdk"
+
+          mkdir -p "$SDK/tools/bin"
+
+          cat > "$SDK/tools/bin/sdkmanager" <<EOF
+          #!/usr/bin/env bash
+          exec "$SDK/cmdline-tools/latest/bin/sdkmanager" "\$@"
+          EOF
+
+          chmod +x "$SDK/tools/bin/sdkmanager"
+
+          echo "Testing legacy Buildozer sdkmanager path..."
+
+          "$SDK/tools/bin/sdkmanager" \
+            --sdk_root="$SDK" \
+            --version
+
+
+      # ============================================================
+      # 9. PRE-INJECT LICENSE HASHES
       # ============================================================
       - name: Pre-inject Android SDK licenses
         run: |
@@ -146,11 +178,11 @@ jobs:
 
           chmod 644 "$SDK/licenses/android-sdk-license"
 
-          echo "License hashes installed."
+          echo "Android license hashes injected."
 
 
       # ============================================================
-      # 9. ACCEPT ANDROID SDK LICENSES
+      # 10. ACCEPT ALL SDK LICENSES
       # ============================================================
       - name: Accept Android SDK licenses
         run: |
@@ -165,7 +197,7 @@ jobs:
 
 
       # ============================================================
-      # 10. INSTALL REQUIRED SDK COMPONENTS
+      # 11. INSTALL REQUIRED SDK PACKAGES
       # ============================================================
       - name: Install Android SDK packages
         run: |
@@ -187,7 +219,7 @@ jobs:
 
 
       # ============================================================
-      # 11. ACCEPT LICENSES AGAIN
+      # 12. RE-ACCEPT LICENSES
       # ============================================================
       - name: Re-accept Android SDK licenses
         run: |
@@ -202,7 +234,7 @@ jobs:
 
 
       # ============================================================
-      # 12. VERIFY SDK
+      # 13. VERIFY SDK INSTALLATION
       # ============================================================
       - name: Verify Android SDK installation
         run: |
@@ -221,18 +253,20 @@ jobs:
           ls -la "$SDK/platforms"
 
           echo "Verifying Build Tools 33.0.2..."
+
           test -d "$SDK/build-tools/33.0.2"
           test -f "$SDK/build-tools/33.0.2/aidl"
           test -x "$SDK/build-tools/33.0.2/aidl"
 
-          echo "Verifying Platform Android 33..."
+          echo "Verifying Android Platform 33..."
+
           test -d "$SDK/platforms/android-33"
 
-          echo "Android SDK verified successfully."
+          echo "SDK verification successful."
 
 
       # ============================================================
-      # 13. PATCH BUILDOZER CONFIGURATION
+      # 14. PATCH BUILDOZER CONFIGURATION
       # ============================================================
       - name: Patch Buildozer configuration
         working-directory: app
@@ -247,7 +281,7 @@ jobs:
               buildozer.spec
           else
             echo "" >> buildozer.spec
-            echo "# Forced SDK for GitHub Actions" >> buildozer.spec
+            echo "# Forced Android SDK for GitHub Actions" >> buildozer.spec
             echo "android.sdk_path = $SDK" >> buildozer.spec
           fi
 
@@ -268,7 +302,7 @@ jobs:
           fi
 
           echo "=========================================="
-          echo "FINAL BUILDOZER CONFIG"
+          echo "FINAL BUILDOZER CONFIGURATION"
           echo "=========================================="
 
           grep -E \
@@ -277,7 +311,7 @@ jobs:
 
 
       # ============================================================
-      # 14. ADD SDK TO PATH
+      # 15. ADD SDK TO PATH
       # ============================================================
       - name: Add Android SDK tools to PATH
         run: |
@@ -285,11 +319,12 @@ jobs:
 
           echo "$SDK/platform-tools" >> "$GITHUB_PATH"
           echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$SDK/tools/bin" >> "$GITHUB_PATH"
           echo "$SDK/build-tools/33.0.2" >> "$GITHUB_PATH"
 
 
       # ============================================================
-      # 15. CLEAN PROJECT CACHE
+      # 16. CLEAN PROJECT CACHE
       # ============================================================
       - name: Clean old Buildozer cache
         working-directory: app
@@ -298,7 +333,7 @@ jobs:
 
 
       # ============================================================
-      # 16. FINAL ENVIRONMENT CHECK
+      # 17. FINAL ENVIRONMENT CHECK
       # ============================================================
       - name: Final Android environment diagnostics
         run: |
@@ -310,8 +345,14 @@ jobs:
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
           echo ""
-          echo "SDK Manager:"
+          echo "Modern SDK Manager:"
           "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+            --sdk_root="$SDK" \
+            --version
+
+          echo ""
+          echo "Legacy Buildozer SDK Manager:"
+          "$SDK/tools/bin/sdkmanager" \
             --sdk_root="$SDK" \
             --version
 
@@ -321,7 +362,7 @@ jobs:
 
 
       # ============================================================
-      # 17. BUILD APK
+      # 18. BUILD APK
       # ============================================================
       - name: Build Android APK
         working-directory: app
@@ -338,19 +379,25 @@ jobs:
 
           echo "ANDROID_HOME=$ANDROID_HOME"
 
+          echo ""
+          echo "Build Tools:"
           ls -la "$ANDROID_HOME/build-tools"
+
+          echo ""
+          echo "Starting build..."
 
           buildozer -v android debug
 
 
       # ============================================================
-      # 18. VERIFY APK
+      # 19. VERIFY GENERATED APK
       # ============================================================
       - name: Verify generated APK
         working-directory: app
         run: |
           set -eux
 
+          echo "Generated files:"
           find bin -type f -print
 
           APK=$(find bin -type f -name "*.apk" | head -n 1)
@@ -365,7 +412,7 @@ jobs:
 
 
       # ============================================================
-      # 19. UPLOAD APK
+      # 20. UPLOAD APK
       # ============================================================
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
