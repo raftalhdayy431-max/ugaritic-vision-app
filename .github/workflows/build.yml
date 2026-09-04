@@ -29,7 +29,7 @@ jobs:
 
     - name: Build APK with Buildozer
       run: |
-        echo y | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --sdk_root=${ANDROID_SDK_ROOT} "build-tools;33.0.2" "platforms;android-33" || true
+        yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.2" "platforms;android-33" || true
         cd app && buildozer -v android debug
 
     - name: Upload APK Artifact
