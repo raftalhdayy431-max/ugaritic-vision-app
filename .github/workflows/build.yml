@@ -27,9 +27,17 @@ jobs:
       run: |
         pip install --upgrade cython buildozer
 
+    - name: Force Android Licenses and Pre-install Build-Tools 33
+      run: |
+        mkdir -p ~/.android
+        echo "### License accepted by automated script" > ~/.android/repositories.cfg
+        # إنشاء مجلد الـ build-tools مسبقاً وخداع البيلدوزر برخصة مقبولة
+        export ANDROID_HOME=/usr/local/lib/android/sdk
+        yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.2" "platforms;android-33" || true
+
     - name: Build APK with Buildozer
       run: |
-        yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.2" "platforms;android-33" || true
         cd app && buildozer -v android debug
 
     - name: Upload APK Artifact
