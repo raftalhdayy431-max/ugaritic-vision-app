@@ -27,14 +27,20 @@ jobs:
       run: |
         pip install --upgrade cython buildozer
 
-    - name: Force Android Licenses and Pre-install Build-Tools 33
+    - name: Reverse-Engineer & Force Pre-Install SDK Tools & Licenses
       run: |
-        mkdir -p ~/.android
-        echo "### License accepted by automated script" > ~/.android/repositories.cfg
-        # إنشاء مجلد الـ build-tools مسبقاً وخداع البيلدوزر برخصة مقبولة
-        export ANDROID_HOME=/usr/local/lib/android/sdk
-        yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses || true
-        yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "build-tools;33.0.2" "platforms;android-33" || true
+        # إنشاء مسارات بيلدوزر الداخلية قسراً
+        mkdir -p /home/runner/.buildozer/android/platform/android-sdk/licenses
+        mkdir -p /home/runner/.buildozer/android/platform/android-sdk/build-tools
+        
+        # زرع بصمات التراخيص الرسمية لأندرويد لمنع ظهور (Accept? y/N) للأبد
+        echo "8933bac1632f4fe7906bf174efb15daae6137ea2" > /home/runner/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
+        echo "d56f518747f451e06a5bddb4d7afab13355d40f4" >> /home/runner/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
+        echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" >> /home/runner/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
+
+        # فرض تثبيت الإصدارين 33 و 37 مسبقاً لجعل بيلدوزر يعثر عليهما فوراً دون تحميل
+        export ANDROID_HOME=/home/runner/.buildozer/android/platform/android-sdk
+        yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "platforms;android-33" "build-tools;33.0.2" "build-tools;37.0.0" || true
 
     - name: Build APK with Buildozer
       run: |
