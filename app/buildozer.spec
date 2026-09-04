@@ -28,7 +28,7 @@ orientation = portrait
 android.permissions = CAMERA,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
 
 # (int) Target Android API (تم رفعه إلى 34 ليتوافق مع أحدث متطلبات متجر جوجل بلاي والإصدارات الحديثة)
-android.api = 34
+android.api = 33
 
 # (int) Minimum API your APK will support (تم ضبطه على 21 ليدعم الهواتف القديمة بدءاً من Android 5.0 فصاعداً)
 android.minapi = 21
@@ -37,7 +37,7 @@ android.minapi = 21
 android.ndk = 25b
 
 # (str) Android SDK version to use
-android.sdk = 34
+android.sdk = 33
 
 # (bool) Indicate whether the application should be fullscreen or not
 fullscreen = 0
