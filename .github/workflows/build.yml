@@ -32,7 +32,6 @@ jobs:
         PLATFORM_DIR="/home/runner/.buildozer/android/platform"
         mkdir -p "$PLATFORM_DIR"
 
-        # التحميل المباشر لـ NDK r25b من خوادم جوجل الرسمية مع دعم إعادة المحاولة لتجنب أخطاء 502
         NDK_ZIP="android-ndk-r25b-linux.zip"
         NDK_URL="https://dl.google.com/android/repository/$NDK_ZIP"
         
@@ -41,10 +40,15 @@ jobs:
         curl -O --retry 5 --retry-delay 2 "$NDK_URL"
 
         echo "Extracting Android NDK r25b..."
+        # فك الضغط مباشرة في المسار الصحيح وتجنب نقل المجلد الخاطئ
         unzip -q "$NDK_ZIP" -d "$PLATFORM_DIR"
-        mv "$PLATFORM_DIR/android-ndk-r25b" "$PLATFORM_DIR/android-ndk-r25b"
+        
+        # التأكد من مطابقة اسم المجلد للمتوقع من قبل buildozer
+        if [ -d "$PLATFORM_DIR/android-ndk-r25b-linux" ]; then
+          mv "$PLATFORM_DIR/android-ndk-r25b-linux" "$PLATFORM_DIR/android-ndk-r25b"
+        fi
+        
         rm -f "$NDK_ZIP"
-
     - name: Reverse-Engineer & Force Pre-Install SDK Tools & Licenses
       run: |
         SDK_DIR="/home/runner/.buildozer/android/platform/android-sdk"
