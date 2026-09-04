@@ -12,13 +12,16 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
+
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -26,9 +29,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Install dependencies
+
+      - name: Install system dependencies
         run: |
           sudo apt-get update
+
           sudo apt-get install -y \
             build-essential \
             ccache \
@@ -50,49 +55,245 @@ jobs:
             libncurses6 \
             libstdc++6
 
+
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade setuptools wheel
+
           python -m pip install "cython<3.1"
           python -m pip install "buildozer==1.5.0"
 
-      - name: Check project
+          buildozer --version
+
+
+      - name: Prepare Buildozer Android SDK
+        shell: bash
         run: |
-          test -f app/buildozer.spec
-          echo "buildozer.spec found"
+          set -e
+
+          SDK="/home/runner/.buildozer/android/platform/android-sdk"
+
+          echo "Creating Buildozer SDK:"
+          echo "$SDK"
+
+          mkdir -p "$SDK"
+
+          # ----------------------------------------------------------
+          # Find GitHub Actions Android SDK
+          # ----------------------------------------------------------
+
+          RUNNER_SDK="/usr/local/lib/android/sdk"
+
+          if [ ! -d "$RUNNER_SDK" ]; then
+            echo "GitHub Android SDK not found."
+            exit 1
+          fi
+
+          echo "Runner SDK found:"
+          echo "$RUNNER_SDK"
+
+
+          # ----------------------------------------------------------
+          # Copy the SDK into the exact directory Buildozer expects
+          # ----------------------------------------------------------
+
+          rsync -a \
+            "$RUNNER_SDK/" \
+            "$SDK/"
+
+
+          # ----------------------------------------------------------
+          # Find sdkmanager
+          # ----------------------------------------------------------
+
+          SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -f "$SDKMANAGER" ]; then
+            SDKMANAGER=$(find "$SDK/cmdline-tools" \
+              -name sdkmanager \
+              -type f \
+              2>/dev/null | head -n 1)
+          fi
+
+          if [ -z "$SDKMANAGER" ] || [ ! -f "$SDKMANAGER" ]; then
+            echo "sdkmanager not found."
+            exit 1
+          fi
+
+          echo "SDKMANAGER:"
+          echo "$SDKMANAGER"
+
+
+          # ----------------------------------------------------------
+          # Accept licenses
+          # ----------------------------------------------------------
+
+          yes | "$SDKMANAGER" \
+            --sdk_root="$SDK" \
+            --licenses || true
+
+
+          # ----------------------------------------------------------
+          # Install EXACT Build Tools required
+          # ----------------------------------------------------------
+
+          "$SDKMANAGER" \
+            --sdk_root="$SDK" \
+            "platform-tools" \
+            "platforms;android-33" \
+            "build-tools;33.0.2"
+
+
+          # ----------------------------------------------------------
+          # Install NDK 25b
+          # ----------------------------------------------------------
+
+          if [ ! -d "$SDK/ndk/25.2.9519653" ]; then
+
+            "$SDKMANAGER" \
+              --sdk_root="$SDK" \
+              "ndk;25.2.9519653"
+
+          fi
+
+
+          # ----------------------------------------------------------
+          # Verify Build Tools
+          # ----------------------------------------------------------
+
           echo ""
+          echo "=========================================="
+          echo "BUILD TOOLS"
+          echo "=========================================="
+
+          ls -la "$SDK/build-tools"
+
+          echo ""
+          echo "=========================================="
+          echo "AIDL"
+          echo "=========================================="
+
+          if [ ! -f "$SDK/build-tools/33.0.2/aidl" ]; then
+            echo "ERROR: AIDL was not installed."
+            exit 1
+          fi
+
+          "$SDK/build-tools/33.0.2/aidl" --version || true
+
+
+          # ----------------------------------------------------------
+          # Export variables
+          # ----------------------------------------------------------
+
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+
+          echo "ANDROID_NDK_HOME=$SDK/ndk/25.2.9519653" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$SDK/ndk/25.2.9519653" >> "$GITHUB_ENV"
+
+
+      - name: Verify Buildozer SDK
+        shell: bash
+        run: |
+          set -e
+
+          SDK="/home/runner/.buildozer/android/platform/android-sdk"
+
+          echo "=========================================="
+          echo "FINAL SDK CHECK"
+          echo "=========================================="
+
+          echo "SDK:"
+          echo "$SDK"
+
+          echo ""
+          echo "Build Tools:"
+          ls -la "$SDK/build-tools"
+
+          echo ""
+          echo "Required Build Tools:"
+          ls -la "$SDK/build-tools/33.0.2"
+
+          echo ""
+          echo "AIDL:"
+          ls -la "$SDK/build-tools/33.0.2/aidl"
+
+          echo ""
+          echo "Android Platform:"
+          ls -la "$SDK/platforms/android-33"
+
+          echo ""
+          echo "NDK:"
+          ls -la "$SDK/ndk/25.2.9519653"
+
+          echo ""
+          echo "=========================================="
+          echo "SDK READY"
+          echo "=========================================="
+
+
+      - name: Verify project
+        shell: bash
+        run: |
+          set -e
+
+          if [ ! -f "app/buildozer.spec" ]; then
+            echo "app/buildozer.spec not found."
+            exit 1
+          fi
+
+          echo "buildozer.spec:"
           cat app/buildozer.spec
 
-      - name: Fix Buildozer configuration
+
+      - name: Fix Android settings
         working-directory: app
+        shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          p = Path("buildozer.spec")
-          text = p.read_text()
+          path = Path("buildozer.spec")
+          text = path.read_text()
 
-          replacements = {
-              "android.minapi = 21": "android.minapi = 24",
-              "android.minapi=21": "android.minapi = 24",
-              "android.build_tools_version = 37.0.0": "android.build_tools_version = 33.0.2",
-              "android.build_tools_version=37.0.0": "android.build_tools_version = 33.0.2",
+          lines = text.splitlines()
+
+          values = {
+              "android.api": "33",
+              "android.minapi": "24",
+              "android.ndk": "25b",
+              "android.sdk": "33",
+              "android.build_tools_version": "33.0.2",
           }
 
-          for old, new in replacements.items():
-              text = text.replace(old, new)
+          found = set()
+          output = []
 
-          if "android.minapi" not in text:
-              text += "\nandroid.minapi = 24\n"
+          for line in lines:
+              stripped = line.strip()
 
-          p.write_text(text)
+              replaced = False
 
-          print("Final Android settings:")
-          for line in text.splitlines():
-              if line.strip().startswith("android."):
-                  print(line)
+              for key, value in values.items():
+                  if stripped.startswith(key + " =") or stripped.startswith(key + "="):
+                      output.append(f"{key} = {value}")
+                      found.add(key)
+                      replaced = True
+                      break
+
+              if not replaced:
+                  output.append(line)
+
+          for key, value in values.items():
+              if key not in found:
+                  output.append(f"{key} = {value}")
+
+          path.write_text("\n".join(output) + "\n")
+
+          print(path.read_text())
           PY
+
 
       - name: Build APK
         working-directory: app
@@ -100,34 +301,41 @@ jobs:
         run: |
           set -e
 
-          echo "========================================"
-          echo "BUILDING UGARITIC VISION AI"
-          echo "========================================"
+          echo "=========================================="
+          echo "BUILDING APK"
+          echo "=========================================="
 
-          echo "Python:"
-          python --version
+          echo "ANDROID_HOME:"
+          echo "$ANDROID_HOME"
 
           echo ""
-          echo "Buildozer:"
-          buildozer --version
+          echo "ANDROID_NDK_HOME:"
+          echo "$ANDROID_NDK_HOME"
+
+          echo ""
+          echo "AIDL:"
+          "$ANDROID_HOME/build-tools/33.0.2/aidl" --version || true
 
           echo ""
           echo "Starting Buildozer..."
 
           buildozer -v android debug
 
+
       - name: Show APK
         if: always()
         run: |
-          echo "========================================"
-          echo "APK FILES"
-          echo "========================================"
+          echo "=========================================="
+          echo "APK OUTPUT"
+          echo "=========================================="
 
-          find app/bin -type f \
+          find app/bin \
+            -type f \
             \( -name "*.apk" -o -name "*.aab" \) \
             -print 2>/dev/null || true
 
           ls -lah app/bin 2>/dev/null || true
+
 
       - name: Upload APK
         if: success()
@@ -137,11 +345,12 @@ jobs:
           path: app/bin/*.apk
           if-no-files-found: error
 
+
       - name: Upload build logs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs
+          name: android-build-logs
           path: |
             app/.buildozer/**/*.log
             app/.buildozer/**/*.txt
