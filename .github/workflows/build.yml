@@ -27,12 +27,9 @@ jobs:
       run: |
         pip install --upgrade cython buildozer
 
-    - name: Accept Android Licenses & Build APK
+    - name: Build APK with Buildozer
       run: |
-        mkdir -p ~/.android
-        touch ~/.android/repositories.cfg
-        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-        cd app && yes | buildozer -v android debug
+        cd app && buildozer -v android debug
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
