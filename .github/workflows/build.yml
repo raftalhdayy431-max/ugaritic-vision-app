@@ -5,45 +5,32 @@ on:
     branches:
       - main
       - master
-
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
 
     env:
       DEBIAN_FRONTEND: noninteractive
-
       ANDROID_HOME: /home/runner/.buildozer/android/platform/android-sdk
       ANDROID_SDK_ROOT: /home/runner/.buildozer/android/platform/android-sdk
       ANDROIDSDK: /home/runner/.buildozer/android/platform/android-sdk
-
       BUILDOZER_WARN_ON_ROOT: "0"
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
 
     steps:
 
-      # ============================================================
-      # CHECKOUT
-      # ============================================================
-      - name: Checkout source code
+      - name: Checkout code
         uses: actions/checkout@v4
 
 
-      # ============================================================
-      # PYTHON
-      # ============================================================
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
 
-      # ============================================================
-      # JAVA
-      # ============================================================
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -51,13 +38,9 @@ jobs:
           java-version: "17"
 
 
-      # ============================================================
-      # SYSTEM DEPENDENCIES
-      # ============================================================
       - name: Install system dependencies
         run: |
           sudo apt-get update -qq
-
           sudo apt-get install -y -qq \
             build-essential \
             ccache \
@@ -76,22 +59,15 @@ jobs:
             wget
 
 
-      # ============================================================
-      # INSTALL BUILDOZER
-      # ============================================================
       - name: Install Buildozer
         run: |
           python -m pip install --upgrade pip setuptools wheel
-
-          python -m pip install \
-            "Cython<3.1" \
-            buildozer
-
+          python -m pip install "Cython<3.1" buildozer
           buildozer --version
 
 
       # ============================================================
-      # RESTORE BUILDOZER CACHE
+      # CACHE
       # ============================================================
       - name: Restore Buildozer cache
         uses: actions/cache@v4
@@ -105,62 +81,26 @@ jobs:
 
 
       # ============================================================
-      # CREATE SDK DIRECTORY
+      # ANDROID SDK
       # ============================================================
-      - name: Create Android SDK directory
-        run: |
-          set -eux
-
-          SDK="$HOME/.buildozer/android/platform/android-sdk"
-
-          mkdir -p "$SDK"
-          mkdir -p "$SDK/licenses"
-          mkdir -p "$SDK/build-tools"
-          mkdir -p "$SDK/platform-tools"
-          mkdir -p "$SDK/platforms"
-          mkdir -p "$SDK/cmdline-tools"
-
-
-      # ============================================================
-      # COPY COMMAND LINE TOOLS
-      # ============================================================
-      - name: Install Android command line tools
+      - name: Prepare Android SDK
         run: |
           set -eux
 
           SDK="$HOME/.buildozer/android/platform/android-sdk"
           SOURCE_SDK="/usr/local/lib/android/sdk"
 
-          if [ ! -d "$SOURCE_SDK/cmdline-tools/latest" ]; then
-            echo "Android command line tools not found"
-            exit 1
-          fi
+          mkdir -p "$SDK/licenses"
+          mkdir -p "$SDK/build-tools"
+          mkdir -p "$SDK/platform-tools"
+          mkdir -p "$SDK/platforms"
+          mkdir -p "$SDK/cmdline-tools"
 
           if [ ! -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
-
             rm -rf "$SDK/cmdline-tools/latest"
-
-            mkdir -p "$SDK/cmdline-tools"
-
-            cp -a \
-              "$SOURCE_SDK/cmdline-tools/latest" \
+            cp -a "$SOURCE_SDK/cmdline-tools/latest" \
               "$SDK/cmdline-tools/latest"
-
           fi
-
-          "$SDK/cmdline-tools/latest/bin/sdkmanager" \
-            --sdk_root="$SDK" \
-            --version
-
-
-      # ============================================================
-      # LEGACY SDKMANAGER COMPATIBILITY
-      # ============================================================
-      - name: Create Buildozer compatibility sdkmanager
-        run: |
-          set -eux
-
-          SDK="$HOME/.buildozer/android/platform/android-sdk"
 
           mkdir -p "$SDK/tools/bin"
 
@@ -171,26 +111,27 @@ jobs:
 
           chmod +x "$SDK/tools/bin/sdkmanager"
 
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+            --sdk_root="$SDK" \
+            --version
+
 
       # ============================================================
       # ACCEPT LICENSES
       # ============================================================
-      - name: Accept Android SDK licenses
+      - name: Accept Android licenses
         run: |
-          set -eux
-
           SDK="$HOME/.buildozer/android/platform/android-sdk"
 
-          yes | \
-          "$SDK/cmdline-tools/latest/bin/sdkmanager" \
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" \
             --sdk_root="$SDK" \
             --licenses || true
 
 
       # ============================================================
-      # INSTALL SDK PACKAGES
+      # INSTALL SDK
       # ============================================================
-      - name: Install Android SDK packages
+      - name: Install Android SDK components
         run: |
           set -eux
 
@@ -203,54 +144,11 @@ jobs:
             "platforms;android-33" \
             "build-tools;33.0.2"
 
-
-      # ============================================================
-      # VERIFY SDK
-      # ============================================================
-      - name: Verify Android SDK
-        run: |
-          set -eux
-
-          SDK="$HOME/.buildozer/android/platform/android-sdk"
-
-          test -x "$SDK/tools/bin/sdkmanager"
-          test -d "$SDK/build-tools/33.0.2"
           test -x "$SDK/build-tools/33.0.2/aidl"
-          test -d "$SDK/platforms/android-33"
-
-          echo "========================================"
-          echo "ANDROID SDK READY"
-          echo "========================================"
-
-          ls -la "$SDK/build-tools"
-          ls -la "$SDK/platforms"
 
 
       # ============================================================
-      # PATCH BUILDOZER SPEC
-      # ============================================================
-      - name: Configure Buildozer
-        working-directory: app
-        run: |
-          set -eux
-
-          SDK="$HOME/.buildozer/android/platform/android-sdk"
-
-          sed -i '/^android.sdk_path *=/d' buildozer.spec
-          sed -i '/^android.skip_update *=/d' buildozer.spec
-          sed -i '/^android.accept_sdk_license *=/d' buildozer.spec
-
-          cat >> buildozer.spec <<EOF
-
-          # GitHub Actions configuration
-          android.sdk_path = $SDK
-          android.skip_update = True
-          android.accept_sdk_license = True
-          EOF
-
-
-      # ============================================================
-      # ADD TO PATH
+      # CONFIGURE PATH
       # ============================================================
       - name: Configure Android PATH
         run: |
@@ -263,88 +161,184 @@ jobs:
 
 
       # ============================================================
-      # PRE-DOWNLOAD FREETYPE WITH STRONG RETRIES
+      # PATCH BUILDOZER SPEC
       # ============================================================
-      - name: Pre-download FreeType
+      - name: Configure Buildozer
+        working-directory: app
+        run: |
+          SDK="$HOME/.buildozer/android/platform/android-sdk"
+
+          sed -i '/^android.sdk_path *=/d' buildozer.spec
+          sed -i '/^android.skip_update *=/d' buildozer.spec
+          sed -i '/^android.accept_sdk_license *=/d' buildozer.spec
+
+          cat >> buildozer.spec <<EOF
+
+          android.sdk_path = $SDK
+          android.skip_update = True
+          android.accept_sdk_license = True
+          EOF
+
+
+      # ============================================================
+      # INITIALIZE BUILDOZER
+      #
+      # نجعل Buildozer ينشئ python-for-android محلياً أولاً
+      # ============================================================
+      - name: Initialize Buildozer environment
         working-directory: app
         run: |
           set -eux
 
-          PACKAGE_DIR="$PWD/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/packages/freetype"
-
-          mkdir -p "$PACKAGE_DIR"
-
-          cd "$PACKAGE_DIR"
-
-          URL="https://download.savannah.gnu.org/releases/freetype/freetype-2.14.1.tar.gz"
-          FILE="freetype-2.14.1.tar.gz"
-
-          if [ ! -f "$FILE" ]; then
-
-            echo "Downloading FreeType with retry..."
-
-            curl \
-              --location \
-              --fail \
-              --retry 15 \
-              --retry-delay 5 \
-              --retry-all-errors \
-              --connect-timeout 30 \
-              --max-time 1200 \
-              -o "$FILE" \
-              "$URL"
-
-          fi
-
-          echo "FreeType archive:"
-
-          ls -lh "$FILE"
-
-          echo "Testing archive..."
-
-          tar -tzf "$FILE" > /dev/null
-
-          echo "FreeType downloaded successfully."
+          # هذا الأمر قد يفشل لأننا لا نريد إكمال البناء هنا
+          # هدفنا فقط إنشاء python-for-android داخل .buildozer
+          buildozer android debug || true
 
 
       # ============================================================
-      # SECOND FREETYPE MIRROR FALLBACK
+      # PATCH FREETYPE RECIPE
+      #
+      # نستبدل رابط Savannah المعطل بمرآة بديلة
       # ============================================================
-      - name: Verify FreeType fallback
+      - name: Patch FreeType download source
         working-directory: app
         run: |
           set -eux
 
-          PACKAGE_DIR="$PWD/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/packages/freetype"
+          P4A_DIR="$PWD/.buildozer/android/platform/python-for-android"
 
-          FILE="$PACKAGE_DIR/freetype-2.14.1.tar.gz"
+          echo "Searching python-for-android..."
 
-          if [ ! -s "$FILE" ]; then
-
-            echo "Primary FreeType download missing."
-
-            mkdir -p "$PACKAGE_DIR"
-
-            cd "$PACKAGE_DIR"
-
-            echo "Trying GitHub mirror..."
-
-            curl \
-              --location \
-              --fail \
-              --retry 10 \
-              --retry-delay 5 \
-              --retry-all-errors \
-              -o freetype-2.14.1.tar.gz \
-              https://github.com/freetype/freetype/archive/refs/tags/VER-2-14-1.tar.gz
-
+          if [ ! -d "$P4A_DIR" ]; then
+            echo "ERROR: python-for-android directory not found"
+            exit 1
           fi
 
-          ls -lh "$FILE"
+          RECIPE="$P4A_DIR/pythonforandroid/recipes/freetype/__init__.py"
+
+          if [ ! -f "$RECIPE" ]; then
+            echo "ERROR: FreeType recipe not found"
+            find "$P4A_DIR" -iname "*freetype*" -print
+            exit 1
+          fi
+
+          echo "======================================"
+          echo "ORIGINAL FREETYPE RECIPE"
+          echo "======================================"
+
+          grep -n "url\|savannah\|version" "$RECIPE" || true
+
+          # استبدال المصدر الأساسي
+          sed -i \
+            's|https://download\.savannah\.gnu\.org/releases/freetype/|https://download-mirror.savannah.gnu.org/releases/freetype/|g' \
+            "$RECIPE"
+
+          echo "======================================"
+          echo "PATCHED FREETYPE RECIPE"
+          echo "======================================"
+
+          grep -n "url\|savannah\|version" "$RECIPE" || true
 
 
       # ============================================================
-      # BUILD APK
+      # PRE-DOWNLOAD FREETYPE FROM MULTIPLE MIRRORS
+      # ============================================================
+      - name: Download FreeType from fallback mirrors
+        working-directory: app
+        run: |
+          set -eux
+
+          BASE="$PWD/.buildozer/android/platform"
+
+          mkdir -p "$BASE/build-arm64-v8a_armeabi-v7a/packages/freetype"
+
+          TARGET="$BASE/build-arm64-v8a_armeabi-v7a/packages/freetype/freetype-2.14.1.tar.gz"
+
+          if [ -s "$TARGET" ]; then
+            echo "FreeType already exists."
+            exit 0
+          fi
+
+          URLS=(
+            "https://download-mirror.savannah.gnu.org/releases/freetype/freetype-2.14.1.tar.gz"
+            "https://nongnu.uib.no/freetype/freetype-2.14.1.tar.gz"
+            "https://mirrors.ocf.berkeley.edu/nongnu/freetype/freetype-2.14.1.tar.gz"
+            "https://mirror.netcologne.de/savannah/freetype/freetype-2.14.1.tar.gz"
+            "https://sourceforge.net/projects/freetype/files/freetype2/2.14.1/freetype-2.14.1.tar.gz/download"
+          )
+
+          SUCCESS=0
+
+          for URL in "${URLS[@]}"; do
+
+            echo ""
+            echo "======================================"
+            echo "Trying:"
+            echo "$URL"
+            echo "======================================"
+
+            rm -f "$TARGET"
+
+            if curl \
+              -L \
+              --fail \
+              --connect-timeout 20 \
+              --max-time 300 \
+              --retry 3 \
+              --retry-all-errors \
+              -o "$TARGET" \
+              "$URL"; then
+
+              echo "Download succeeded."
+
+              if tar -tzf "$TARGET" > /dev/null 2>&1; then
+
+                echo "Archive is valid."
+
+                SUCCESS=1
+                break
+
+              else
+
+                echo "Downloaded file is invalid."
+
+                rm -f "$TARGET"
+
+              fi
+
+            fi
+
+          done
+
+          if [ "$SUCCESS" -ne 1 ]; then
+            echo "ERROR: ALL FREETYPE MIRRORS FAILED"
+            exit 1
+          fi
+
+          echo "======================================"
+          echo "VERIFY FREETYPE"
+          echo "======================================"
+
+          sha256sum "$TARGET"
+
+          EXPECTED="174d9e53402e1bf9ec7277e22ec199ba3e55a6be2c0740cb18c0ee9850fc8c34"
+
+          ACTUAL=$(sha256sum "$TARGET" | awk '{print $1}')
+
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "ERROR: FreeType checksum mismatch!"
+            echo "Expected: $EXPECTED"
+            echo "Actual:   $ACTUAL"
+            exit 1
+          fi
+
+          echo "FreeType successfully downloaded and verified."
+
+          ls -lh "$TARGET"
+
+
+      # ============================================================
+      # BUILD
       # ============================================================
       - name: Build Android APK
         working-directory: app
@@ -355,31 +349,26 @@ jobs:
         run: |
           set -o pipefail
 
-          echo "========================================"
-          echo "STARTING ANDROID BUILD"
-          echo "========================================"
+          echo "======================================"
+          echo "STARTING FINAL APK BUILD"
+          echo "======================================"
 
           buildozer -v android debug 2>&1 | tee build.log
 
 
       # ============================================================
-      # SHOW APK
+      # VERIFY APK
       # ============================================================
-      - name: Verify generated APK
+      - name: Verify APK
         working-directory: app
         run: |
           set -eux
-
-          echo "APK files:"
 
           find bin -type f -name "*.apk" -print
 
           APK=$(find bin -type f -name "*.apk" | head -n 1)
 
-          if [ -z "$APK" ]; then
-            echo "ERROR: APK not found"
-            exit 1
-          fi
+          test -n "$APK"
 
           ls -lh "$APK"
 
@@ -397,13 +386,14 @@ jobs:
 
 
       # ============================================================
-      # UPLOAD BUILD LOG ON FAILURE
+      # UPLOAD LOG IF FAILURE
       # ============================================================
-      - name: Upload build log on failure
+      - name: Upload build log
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
-          path: app/build.log
+          path: |
+            app/build.log
           if-no-files-found: ignore
           retention-days: 7
