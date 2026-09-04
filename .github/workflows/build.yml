@@ -1,3 +1,4 @@
+```yaml
 name: Build Android APK
 
 on:
@@ -11,28 +12,22 @@ jobs:
   build:
     runs-on: ubuntu-22.04
 
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      P4A_DOWNLOAD_CACHE: /home/runner/.buildozer/android/packages
-
     steps:
-
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      - name: Set up Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Install system dependencies
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -43,164 +38,71 @@ jobs:
             zip \
             wget \
             curl \
-            rsync \
-            pkg-config \
             autoconf \
             automake \
             libtool \
+            pkg-config \
             cmake \
             ninja-build \
-            gettext \
-            libltdl-dev \
             libffi-dev \
             libssl-dev \
             zlib1g-dev \
             libncurses5-dev \
             libncurses6 \
-            libstdc++6 \
-            openjdk-17-jdk
-
-      - name: Check Android SDK
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-
-          ls -la "$ANDROID_HOME"
-
-          echo "Platforms:"
-          ls -la "$ANDROID_HOME/platforms" || true
-
-          echo "Build tools:"
-          ls -la "$ANDROID_HOME/build-tools" || true
-
-          echo "NDK:"
-          ls -la "$ANDROID_HOME/ndk" || true
-
-      - name: Find sdkmanager
-        shell: bash
-        run: |
-          set -e
-
-          SDK="$ANDROID_HOME"
-
-          if [ -f "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
-            SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
-          else
-            SDKMANAGER=$(find "$SDK/cmdline-tools" -name sdkmanager -type f | head -n 1)
-          fi
-
-          if [ -z "$SDKMANAGER" ]; then
-            echo "sdkmanager not found"
-            exit 1
-          fi
-
-          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
-
-          echo "Using:"
-          echo "$SDKMANAGER"
-
-      - name: Accept Android licenses
-        shell: bash
-        run: |
-          yes | "$SDKMANAGER" \
-            --sdk_root="$ANDROID_HOME" \
-            --licenses || true
-
-      - name: Install Android SDK 33
-        shell: bash
-        run: |
-          set -e
-
-          "$SDKMANAGER" \
-            --sdk_root="$ANDROID_HOME" \
-            "platform-tools" \
-            "platforms;android-33" \
-            "build-tools;33.0.2"
-
-      - name: Install Android NDK 25b
-        shell: bash
-        run: |
-          set -e
-
-          NDK_VERSION="25.2.9519653"
-
-          if [ ! -d "$ANDROID_HOME/ndk/$NDK_VERSION" ]; then
-            "$SDKMANAGER" \
-              --sdk_root="$ANDROID_HOME" \
-              "ndk;$NDK_VERSION"
-          fi
-
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
-
-          echo "NDK:"
-          echo "$ANDROID_HOME/ndk/$NDK_VERSION"
+            libstdc++6
 
       - name: Install Buildozer
         run: |
-          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools wheel
+          python -m pip install "cython<3.1"
+          python -m pip install "buildozer==1.5.0"
 
-          python -m pip install \
-            "cython<3.1" \
-            "buildozer==1.5.0"
-
-          python --version
-          buildozer --version
-
-      - name: Restore Buildozer cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            /home/runner/.buildozer/android/packages
-            /home/runner/.buildozer/android/platform
-          key: buildozer-${{ runner.os }}-${{ hashFiles('app/buildozer.spec') }}
-          restore-keys: |
-            buildozer-${{ runner.os }}-
-
-      - name: Verify project
-        shell: bash
+      - name: Check project
         run: |
-          if [ ! -d "app" ]; then
-            echo "ERROR: app directory does not exist"
-            exit 1
-          fi
-
-          if [ ! -f "app/buildozer.spec" ]; then
-            echo "ERROR: app/buildozer.spec does not exist"
-            exit 1
-          fi
-
-          echo "Project:"
-          ls -la app
-
+          test -f app/buildozer.spec
+          echo "buildozer.spec found"
           echo ""
-          echo "buildozer.spec:"
           cat app/buildozer.spec
 
-      - name: Verify Buildozer configuration
+      - name: Fix Buildozer configuration
         working-directory: app
-        shell: bash
         run: |
-          echo "Android configuration:"
-          grep -E \
-            "android.api|android.minapi|android.ndk|android.sdk|android.build_tools_version|android.archs" \
-            buildozer.spec || true
+          python - <<'PY'
+          from pathlib import Path
 
-      - name: Clean old APK files
-        run: |
-          mkdir -p app/bin
-          rm -f app/bin/*.apk
-          rm -f app/bin/*.aab
+          p = Path("buildozer.spec")
+          text = p.read_text()
+
+          replacements = {
+              "android.minapi = 21": "android.minapi = 24",
+              "android.minapi=21": "android.minapi = 24",
+              "android.build_tools_version = 37.0.0": "android.build_tools_version = 33.0.2",
+              "android.build_tools_version=37.0.0": "android.build_tools_version = 33.0.2",
+          }
+
+          for old, new in replacements.items():
+              text = text.replace(old, new)
+
+          if "android.minapi" not in text:
+              text += "\nandroid.minapi = 24\n"
+
+          p.write_text(text)
+
+          print("Final Android settings:")
+          for line in text.splitlines():
+              if line.strip().startswith("android."):
+                  print(line)
+          PY
 
       - name: Build APK
         working-directory: app
         shell: bash
         run: |
-          set -o pipefail
+          set -e
 
           echo "========================================"
-          echo "UGRITIC VISION AI"
-          echo "ANDROID BUILD"
+          echo "BUILDING UGARITIC VISION AI"
           echo "========================================"
 
           echo "Python:"
@@ -211,45 +113,22 @@ jobs:
           buildozer --version
 
           echo ""
-          echo "SDK:"
-          echo "$ANDROID_HOME"
-
-          echo ""
-          echo "NDK:"
-          echo "$ANDROID_NDK_HOME"
-
-          echo ""
-          echo "Starting build..."
-
-          buildozer -v android debug 2>&1 | tee build.log
-
-      - name: Retry Build
-        if: failure()
-        working-directory: app
-        shell: bash
-        run: |
-          echo "First build failed."
-          echo "Waiting before retry..."
-          sleep 20
+          echo "Starting Buildozer..."
 
           buildozer -v android debug
 
-      - name: List APK
+      - name: Show APK
         if: always()
-        shell: bash
         run: |
           echo "========================================"
-          echo "APK OUTPUT"
+          echo "APK FILES"
           echo "========================================"
 
-          find app/bin \
-            -maxdepth 1 \
-            -type f \
+          find app/bin -type f \
             \( -name "*.apk" -o -name "*.aab" \) \
-            -print || true
+            -print 2>/dev/null || true
 
-          echo ""
-          ls -lah app/bin || true
+          ls -lah app/bin 2>/dev/null || true
 
       - name: Upload APK
         if: success()
@@ -263,8 +142,9 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: android-build-logs
+          name: build-logs
           path: |
-            app/build.log
-            app/.buildozer/android/platform/python-for-android/build.log
+            app/.buildozer/**/*.log
+            app/.buildozer/**/*.txt
           if-no-files-found: ignore
+```
