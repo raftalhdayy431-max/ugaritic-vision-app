@@ -2,7 +2,7 @@
 
 # (str) Title of your application
 title = Ugaritic Vision AI
-
+version = 0.1
 # (str) Package name
 package.name = ugariticvision
 
